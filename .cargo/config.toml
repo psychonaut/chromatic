@@ -1,0 +1,4 @@
+[env]
+# Bundled aubio C sources are built with -std=c99, which hides POSIX
+# declarations such as strncasecmp; GCC >= 14 treats that as an error.
+CFLAGS = "-D_DEFAULT_SOURCE"

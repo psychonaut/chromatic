@@ -31,10 +31,11 @@ run_command(
 cargo_bin  = find_program('cargo')
 cargo_opt  = [ '--manifest-path', meson.project_source_root() / 'Cargo.toml' ]
 cargo_opt += [ '--target-dir', meson.project_build_root()  / 'src' ]
+cargo_opt += [ '--config', meson.project_source_root() / '.cargo' / 'config.toml' ]
 cargo_env  = [ 'CARGO_HOME=' + meson.project_build_root()  / 'cargo-home' ]
 
 if get_option('buildtype') == 'release'
-  cargo_options += [ '--release' ]
+  cargo_opt += [ '--release' ]
   rust_target = 'release'
 else
   rust_target = 'debug'

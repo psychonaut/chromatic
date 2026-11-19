@@ -1,0 +1,5 @@
+/target/
+/_build/
+/builddir/
+/src/config.rs
+*.deb

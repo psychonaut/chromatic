@@ -47,7 +47,7 @@ mod imp {
     impl ObjectImpl for App {
         fn constructed(&self) {
             self.parent_constructed();
-            let obj = self.instance();
+            let obj = self.obj();
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
         }
@@ -59,7 +59,7 @@ mod imp {
         // tries to launch a "second instance" of the application. When they try
         // to do that, we'll just present any existing window.
         fn activate(&self) {
-            let application = self.instance();
+            let application = self.obj();
             // Get the current window or create one if necessary
             let window = if let Some(window) = application.active_window() {
                 window
@@ -85,7 +85,10 @@ glib::wrapper! {
 
 impl App {
     pub fn new(application_id: &str, flags: &gio::ApplicationFlags) -> Self {
-        glib::Object::new(&[("application-id", &application_id), ("flags", flags)])
+        glib::Object::builder()
+            .property("application-id", application_id)
+            .property("flags", flags)
+            .build()
     }
 
     fn setup_gactions(&self) {
@@ -99,7 +102,7 @@ impl App {
             .activate(move |app: &Self, _, _| app.show_preferences())
             .build();
 
-        self.add_action_entries([quit_action, about_action, preferences_action]).unwrap();
+        self.add_action_entries([quit_action, about_action, preferences_action]);
     }
 
     fn show_about(&self) {
@@ -110,7 +113,7 @@ impl App {
             .application_icon("io.github.nate_xyz.Chromatic")
             .developer_name("nate-xyz")
             .version(VERSION)
-            .developers(vec!["nate-xyz".into()])
+            .developers(vec!["nate-xyz"])
             .copyright("© 2023 nate-xyz")
             .license_type(gtk::License::Gpl30Only)
             .website("https://github.com/nate-xyz/chromatic")

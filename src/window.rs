@@ -20,7 +20,8 @@
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::{gio, gio::SettingsBindFlags, glib, glib::clone, glib::Receiver};
+use gtk::{gio, gio::SettingsBindFlags, glib, glib::clone};
+use async_channel::Receiver;
 
 use std::{cell::{Cell, RefCell}, rc::Rc};
 use std::time::{Duration, Instant};
@@ -101,7 +102,7 @@ mod imp {
         }
 
         fn new() -> Self{
-            let (sender, r) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+            let (sender, r) = async_channel::unbounded();
 
             Self {
                 toast_overlay: TemplateChild::default(),
@@ -136,12 +137,15 @@ mod imp {
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
         @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,        
-        @implements gio::ActionGroup, gio::ActionMap;
+        @implements gio::ActionGroup, gio::ActionMap, gtk::Buildable,
+            gtk::ConstraintTarget, gtk::Native, gtk::Root, gtk::ShortcutManager;
 }
 
 impl Window {
-    pub fn new<P: glib::IsA<gtk::Application>>(application: &P) -> Self {
-        let window: Window = glib::Object::new(&[("application", application)]);
+    pub fn new<P: IsA<gtk::Application>>(application: &P) -> Self {
+        let window: Window = glib::Object::builder()
+            .property("application", application)
+            .build();
         window.setup();
         window
     }
@@ -168,7 +172,7 @@ impl Window {
 
         imp.settings.connect_changed(
             Some("show-gauge"),
-            clone!(@strong self as this => move |_settings, _name| {
+            clone!(#[strong(rename_to = this)] self, move |_settings, _name| {
                 let imp = this.imp();
                 let show = imp.settings.boolean("show-gauge");
                 if show {
@@ -196,14 +200,15 @@ impl Window {
     fn setup_channel(&self) {
         let imp = self.imp();
         let receiver = imp.receiver.borrow_mut().take().unwrap();
-        receiver.attach(
-            None,
-            clone!(@strong self as this => move |action| this.clone().process_action(action)),
-        );
+        glib::spawn_future_local(clone!(#[strong(rename_to = this)] self, async move {
+            while let Ok(action) = receiver.recv().await {
+                this.process_action(action);
+            }
+        }));
     }
 
 
-    fn process_action(&self, action: AudioAction) -> glib::Continue {
+    fn process_action(&self, action: AudioAction) {
         match action {
             AudioAction::RawAudio(buffer) => {
                 debug!("BUFFER {:?}", buffer);
@@ -213,7 +218,6 @@ impl Window {
             },
             // _ => debug!("Received action {:?}", action),
         }
-        glib::Continue(true)
     }
 
     fn bind_signals(&self) {
@@ -223,7 +227,7 @@ impl Window {
         imp.recorder.connect_local(
             "frequency",
             false,
-            clone!(@weak self as this => @default-return None, move |value| {
+            clone!(#[weak(rename_to = this)] self, #[upgrade_or] None, move |value| {
                 let freq_val = value.get(1); 
                 match freq_val {
                     Some(freq_val) => {
@@ -321,7 +325,7 @@ impl Window {
     }
 
     pub fn add_toast(&self, toast: &adw::Toast) {
-        self.imp().toast_overlay.add_toast(toast);
+        self.imp().toast_overlay.add_toast(toast.clone());
     }
 
     pub fn recorder(&self) -> Rc<Recorder> {

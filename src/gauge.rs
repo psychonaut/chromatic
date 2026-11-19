@@ -24,7 +24,8 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 
-use gtk::{cairo, glib, glib::clone, glib::Receiver, glib::Sender, gio};
+use gtk::{cairo, glib, glib::clone, gio};
+use async_channel::{Receiver, Sender};
 
 use std::{cell::Cell, cell::RefCell, error::Error, f64::consts::PI};
 
@@ -75,7 +76,7 @@ mod imp {
         type ParentType = adw::Bin;
 
         fn new() -> Self {
-            let (sender, receiver) = glib::MainContext::channel(glib::PRIORITY_DEFAULT);
+            let (sender, receiver) = async_channel::unbounded();
 
             Self {
                 width: Cell::new(0),
@@ -106,7 +107,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct Gauge(ObjectSubclass<imp::Gauge>)
-        @extends gtk::Widget, adw::Bin;
+        @extends gtk::Widget, adw::Bin,
+        @implements gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Gauge {
@@ -120,13 +122,14 @@ impl Gauge {
     fn setup_channel(&self) {
         let imp = self.imp();
         let receiver = imp.receiver.borrow_mut().take().unwrap();
-        receiver.attach(
-            None,
-            clone!(@strong self as this => move |action| this.clone().process_action(action)),
-        );
+        glib::spawn_future_local(clone!(#[strong(rename_to = this)] self, async move {
+            while let Ok(action) = receiver.recv().await {
+                this.process_action(action);
+            }
+        }));
     }
 
-    fn process_action(&self, action: GaugeAction) -> glib::Continue {
+    fn process_action(&self, action: GaugeAction) {
         match action {
             GaugeAction::UpdateGaugePos(pos) => {
                 self.update_gauge_position(pos);
@@ -134,8 +137,6 @@ impl Gauge {
             }
             // _ => debug!("Received action {:?}", action),
         }
-
-        glib::Continue(true)
     }
 
     fn construct(&self, width: u32, height: u32) {
@@ -157,7 +158,7 @@ impl Gauge {
         imp.drawing_area.set_halign(gtk::Align::Fill);
         imp.drawing_area.set_valign(gtk::Align::Fill);
         imp.drawing_area
-            .set_draw_func(clone!(@strong self as this => move |_, context, _, _| {
+            .set_draw_func(clone!(#[strong(rename_to = this)] self, move |_, context, _, _| {
                 match this.draw(context) {
                     Ok(_) => (),
                     Err(e) => {
@@ -272,7 +273,7 @@ impl Gauge {
                 }
             }
 
-            match glib_sender.send(GaugeAction::UpdateGaugePos(current_pos)) {
+            match glib_sender.send_blocking(GaugeAction::UpdateGaugePos(current_pos)) {
                 Ok(_) => (),
                 Err(e) => {
                     error!("Gauge draw thread error: {}", e);

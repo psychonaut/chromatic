@@ -123,7 +123,8 @@ mod imp {
 glib::wrapper! {
     pub struct PreferencesWindow(ObjectSubclass<imp::PreferencesWindow>)
     @extends gtk::Widget, gtk::Window, adw::Window, adw::PreferencesWindow,
-    @implements gtk::Accessible;
+    @implements gtk::Buildable, gtk::ConstraintTarget, gtk::Native,
+        gtk::Root, gtk::ShortcutManager;
 }
 
 impl PreferencesWindow {
@@ -168,7 +169,7 @@ impl PreferencesWindow {
 
         imp.settings.connect_changed(
             Some("selected-device"),
-            clone!(@strong self as this => move |_settings, _name| {
+            clone!(#[strong(rename_to = this)] self, move |_settings, _name| {
                 debug!("Pref window -> settings update selected device");
                 let imp = this.imp();
                 let device_name = imp.settings.string("selected-device").to_string();
@@ -197,7 +198,7 @@ impl PreferencesWindow {
 
         imp.settings.connect_changed(
             Some("choose-device"),
-            clone!(@strong self as this => move |_settings, _name| {
+            clone!(#[strong(rename_to = this)] self, move |_settings, _name| {
                 debug!("Pref window -> settings choose-device");
                 let imp = this.imp();
                 let manual = imp.settings.boolean("choose-device");
@@ -226,7 +227,7 @@ impl PreferencesWindow {
         self.set_device_selected(device_name);
 
         imp.device_row.connect_selected_notify(
-            clone!(@weak self as this => @default-panic, move |_value| {
+            clone!(#[weak(rename_to = this)] self, #[upgrade_or_panic] move |_value| {
                 debug!("Pref window -> device row select notify");
                 let imp = this.imp();
                 let selected = imp.device_row.selected();
@@ -248,7 +249,7 @@ impl PreferencesWindow {
 
             imp.settings.connect_changed(
                 Some("buffer-size"),
-                clone!(@strong self as this => move |_settings, _name| {
+                clone!(#[strong(rename_to = this)] self, move |_settings, _name| {
                     let imp = this.imp();
                     let device_name = imp.settings.string("selected-device").to_string();
                     imp.buffer_spin.set_sensitive(false);
@@ -271,9 +272,9 @@ impl PreferencesWindow {
 
             imp.settings.connect_changed(
                 Some("gauge-hang"),
-                clone!(@strong self as this => move |_settings, _name| {    
+                move |_settings, _name| {
                     util::gauge().borrow().as_ref().unwrap().start_drawing_thread();
-                }),
+                },
             );
 
         imp.settings
@@ -283,9 +284,9 @@ impl PreferencesWindow {
 
             imp.settings.connect_changed(
                 Some("label-hang"),
-                clone!(@strong self as this => move |_settings, _name| {    
+                move |_settings, _name| {
                     util::window().update_settings();
-                }),
+                },
             );
 
         imp.settings
@@ -295,9 +296,9 @@ impl PreferencesWindow {
 
             imp.settings.connect_changed(
                 Some("gauge-rest-position"),
-                clone!(@strong self as this => move |_settings, _name| {    
+                move |_settings, _name| {
                     util::gauge().borrow().as_ref().unwrap().start_drawing_thread();
-                }),
+                },
             );
 
         

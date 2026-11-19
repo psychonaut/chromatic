@@ -20,7 +20,8 @@
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::{gio, glib, glib::Sender};
+use gtk::{gio, glib};
+use async_channel::Sender;
 
 use std::{cell::Cell, cell::RefCell, error::Error, rc::Rc, fmt, thread};
 use std::sync::mpsc;
@@ -369,7 +370,7 @@ impl Recorder {
 
                     //aubio bugs out sometimes?
                     if pitch < 95999.98 {
-                        match glib_sender.send(AudioAction::Pitch(pitch)) {
+                        match glib_sender.send_blocking(AudioAction::Pitch(pitch)) {
                             Ok(_) => (),
                             Err(e) => {
                                 error!("SEND ERROR {}", e);
